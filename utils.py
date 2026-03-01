@@ -47,6 +47,23 @@ def evaluate_model(model, device, loader):
 
     plt.show()
 
+def draw_img(img):
+    fix, ax = plt.subplots(2, 5, figsize=(30, 5))
+
+    ax[0, 0].imshow(img[:, :, 0], cmap='gray')
+    ax[0, 1].imshow(img[:, :, 1], cmap='gray')
+    ax[0, 2].imshow(img[:, :, 2], cmap='gray')
+    ax[0, 3].imshow(img[:, :, 3], cmap='gray')
+    ax[0, 4].imshow(img[:, :, 4], cmap='gray')
+
+    ax[1, 0].imshow(img[:, :, 5], cmap='gray')
+    ax[1, 1].imshow(img[:, :, 6], cmap='gray')
+    ax[1, 2].imshow(img[:, :, 7], cmap='gray')
+    ax[1, 3].imshow(img[:, :, 8], cmap='gray')
+    ax[1, 4].imshow(img[:, :, 9], cmap='gray')
+
+    plt.show()
+
 train_transform = transforms.Compose([
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.RandomRotation(degrees=20),
