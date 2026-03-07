@@ -3,6 +3,7 @@ from torchvision import transforms
 from sklearn.metrics import classification_report, ConfusionMatrixDisplay, confusion_matrix
 import matplotlib.pyplot as plt
 import torch
+import numpy as np
 
 
 class MedicalDataset(Dataset):
@@ -63,6 +64,23 @@ def draw_img(img):
     ax[1, 4].imshow(img[:, :, 9], cmap='gray')
 
     plt.show()
+
+def repeat_samples(x, y, repeats):
+    aneurysm_mask = np.where(y > 0)[0]
+    healthy_mask = np.where(y == 0)[0]
+
+    x_aneurysm = x[aneurysm_mask]
+    y_aneurysm = y[aneurysm_mask]
+    x_healthy = x[healthy_mask]
+    y_healthy = y[healthy_mask]
+
+    x_aneurysm = np.repeat(x_aneurysm, repeats, axis=0)
+    y_aneurysm = np.repeat(y_aneurysm, repeats, axis=0)
+
+    new_x = np.concatenate([x_aneurysm, x_healthy], axis=0)
+    new_y = np.concatenate([y_aneurysm, y_healthy], axis=0)
+
+    return new_x, new_y
 
 train_transform = transforms.Compose([
     transforms.RandomHorizontalFlip(p=0.5),
