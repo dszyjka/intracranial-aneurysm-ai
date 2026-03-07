@@ -82,6 +82,18 @@ def repeat_samples(x, y, repeats):
 
     return new_x, new_y
 
+def to_tensor(x_train, y_train, x_test, y_test, permute_order=(0, -1, 1, 2)):
+    x_train_tensor = torch.from_numpy(x_train).float()
+    y_train_tensor = torch.from_numpy(y_train).long()
+
+    x_test_tensor = torch.from_numpy(x_test).float()
+    y_test_tensor = torch.from_numpy(y_test).long()
+
+    x_train_tensor = x_train_tensor.permute(permute_order)
+    x_test_tensor = x_test_tensor.permute(permute_order)
+
+    return x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor
+
 train_transform = transforms.Compose([
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.RandomRotation(degrees=20),
