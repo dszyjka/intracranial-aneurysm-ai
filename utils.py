@@ -26,6 +26,8 @@ class MedicalDataset(Dataset):
         return image, label
     
 def train_model(model, optimizer, criterion, train_loader, test_loader, num_epochs, device):
+    acc_history, loss_history = [], []
+
     lowest_loss = np.inf
     best_model_weights = {k : v.cpu() for k, v in model.state_dict().items()}
 
@@ -64,6 +66,9 @@ def train_model(model, optimizer, criterion, train_loader, test_loader, num_epoc
             epoch_loss = running_loss / total_samples
             epoch_acc = running_corrects / total_samples
 
+            loss_history.append(epoch_loss)
+            acc_history.append(epoch_acc)
+
             print(f'Loss: {epoch_loss}, accuracy: {epoch_acc}')
 
             if phase == 'val' and epoch_loss < lowest_loss:
@@ -71,7 +76,7 @@ def train_model(model, optimizer, criterion, train_loader, test_loader, num_epoc
                 lowest_loss = epoch_loss
                 best_model_weights = {k : v.cpu() for k, v in model.state_dict().items()}
 
-    return best_model_weights   
+    return best_model_weights, acc_history, loss_history
 
 
 def evaluate_model(model, device, loader):
