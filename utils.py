@@ -76,7 +76,9 @@ def train_model(model, optimizer, criterion, train_loader, test_loader, num_epoc
                 lowest_loss = epoch_loss
                 best_model_weights = {k : v.cpu() for k, v in model.state_dict().items()}
 
-    return best_model_weights, acc_history, loss_history
+    history = {'acc' : acc_history, 'loss' : loss_history}
+
+    return best_model_weights, history
 
 
 def evaluate_model(model, device, loader):
