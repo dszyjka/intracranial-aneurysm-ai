@@ -26,7 +26,7 @@ class MedicalDataset(Dataset):
         return image, label
     
 def train_model(model, optimizer, criterion, train_loader, test_loader, num_epochs, device):
-    acc_history, loss_history = [], []
+    acc_train_hist, loss_train_hist, acc_val_hist, loss_val_hist = [], [], [], []
 
     lowest_loss = np.inf
     best_model_weights = {k : v.cpu() for k, v in model.state_dict().items()}
@@ -37,9 +37,13 @@ def train_model(model, optimizer, criterion, train_loader, test_loader, num_epoc
         for phase in ('train', 'val'):
             if phase == 'train':
                 dataloader = train_loader
+                acc_hist = acc_train_hist
+                loss_hist = loss_train_hist
                 model.train()
             else:
                 dataloader = test_loader
+                acc_hist = acc_val_hist
+                loss_hist = loss_val_hist
                 model.eval()
 
             running_loss = 0.0
@@ -66,8 +70,8 @@ def train_model(model, optimizer, criterion, train_loader, test_loader, num_epoc
             epoch_loss = running_loss / total_samples
             epoch_acc = running_corrects / total_samples
 
-            loss_history.append(epoch_loss)
-            acc_history.append(epoch_acc)
+            loss_hist.append(epoch_loss)
+            acc_hist.append(epoch_acc)
 
             print(f'Loss: {epoch_loss}, accuracy: {epoch_acc}')
 
@@ -76,10 +80,39 @@ def train_model(model, optimizer, criterion, train_loader, test_loader, num_epoc
                 lowest_loss = epoch_loss
                 best_model_weights = {k : v.cpu() for k, v in model.state_dict().items()}
 
-    history = {'acc' : acc_history, 'loss' : loss_history}
+    history = {'train_acc' : acc_train_hist,
+               'train_loss' : loss_train_hist,
+               'val_acc' : acc_val_hist,
+               'val_loss' : loss_val_hist}
 
     return best_model_weights, history
 
+def draw_loss_and_acc_history(hist):
+    train_acc = hist['train_acc']
+    train_loss = hist['train_loss']
+    val_acc = hist['val_acc']
+    val_loss = hist['val_loss']
+    
+    fig, ax = plt.subplots(1, 2, figsize=(15, 6))
+
+    ax[0].plot(train_acc, color='red', label='train_acc')
+    ax[0].plot(val_acc, color='blue', label='val_acc')
+
+    ax[1].plot(train_loss, color='red', label='train_loss')
+    ax[1].plot(val_loss, color='blue', label='val_loss')
+
+    ax[0].set_title('ACCURACY HISTORY')
+    ax[0].set_xlabel('Epoch')
+    ax[0].set_ylabel('Accuracy')
+    ax[0].legend()
+
+    ax[1].set_title('LOSS HISTORY')
+    ax[1].set_xlabel('Epoch')
+    ax[1].set_ylabel('Loss')
+    ax[1].legend()
+
+    plt.tight_layout()
+    plt.show()
 
 def evaluate_model(model, device, loader):
     y_pred, y_true = [], []
