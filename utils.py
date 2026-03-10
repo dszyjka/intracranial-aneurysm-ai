@@ -1,4 +1,5 @@
 from torch.utils.data import Dataset
+import torch.nn.functional as F
 from torchvision import transforms
 from sklearn.metrics import classification_report, ConfusionMatrixDisplay, confusion_matrix
 import matplotlib.pyplot as plt
@@ -8,23 +9,65 @@ import numpy as np
 
 class MedicalDataset(Dataset):
 
-    def __init__(self, images, labels, transform=None):
+    def __init__(self, images, labels, crop_or_pad, transform=None, target_shape=(10, 224, 224)):
         self.images = images
         self.labels = labels
         self.transform = transform
+        self.crop_or_pad = crop_or_pad
+        self.target_shape = target_shape
 
     def __len__(self):
         return len(self.images)
     
     def __getitem__(self, idx):
-        image = self.images[idx]
+        img = self.images[idx]
         label = self.labels[idx]
-
+        img = self.crop_or_pad(img, self.target_shape)
+        
         if self.transform is not None:
-            image = self.transform(image)
+            img = self.transform(img)
 
-        return image, label
+        return img, label
+
+def crop_pad(img, ch_id, h_id, w_id, target_shape=(10, 224, 224)):
+    y_pad = max(0, target_shape[h_id] - img.shape[h_id])
+    x_pad = max(0, target_shape[w_id] - img.shape[w_id])
+
+    if not (x_pad and y_pad):
+        x_left = max(0, img.shape[w_id] - target_shape[w_id]) // 2
+        x_right = x_left + target_shape[w_id]
+        y_top = max(0, img.shape[h_id] - target_shape[h_id]) // 2
+        y_bottom = y_top + target_shape[h_id]
+
+        img = (img[y_top : y_bottom, x_left : x_right , :] if ch_id
+                else img[: , y_top : y_bottom, x_left : x_right])
     
+    y_before = y_pad // 2
+    y_after = y_pad - y_before 
+    x_before = x_pad // 2
+    x_after = x_pad - x_before
+    
+    img = pad(img, x_before, x_after, y_before, y_after, ch_id)
+    
+    return img
+
+def pad(img, x_before, x_after, y_before, y_after, ch_id):
+    if isinstance(img, np.ndarray):
+        img = (np.pad(img, ((y_before, y_after), (x_before, x_after), (0, 0)),
+                      mode='constant', constant_values=0.0)
+                if ch_id else
+                np.pad(img, ((0, 0), (y_before, y_after), (x_before, x_after)),
+                       mode='constant', constant_values=0.0))
+        
+    elif isinstance(img, torch.Tensor):
+        img = (F.pad(img, (0, 0, x_before, x_after, y_before, y_after), value=0.0)
+               if ch_id else F.pad(img, (x_before, x_after, y_before, y_after), value=0.0))
+    
+    else:
+        raise TypeError('img argument must be torch.Tensor or numpy.ndarray')
+    
+    return img
+
 def train_model(model, optimizer, criterion, train_loader, test_loader, num_epochs, device):
     acc_train_hist, loss_train_hist, acc_val_hist, loss_val_hist = [], [], [], []
 
@@ -203,3 +246,11 @@ label2organ = {
   12: "Left Anterior Cerebral Artery",
   13: "Anterior Communicating Artery"
 }
+
+if __name__ == '__main__':
+    a = np.ones((1, 10, 10))
+    print(a)
+    b = crop_pad(a, 0, 1, 2, (1, 16, 16))
+    c = crop_pad(a, 0, 1, 2, (1, 5, 15))
+    print(b)
+    print(c.shape)
