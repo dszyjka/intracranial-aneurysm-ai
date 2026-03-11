@@ -7,28 +7,6 @@ import torch
 import numpy as np
 
 
-class MedicalDataset(Dataset):
-
-    def __init__(self, images, labels, crop_or_pad, transform=None, target_shape=(10, 224, 224)):
-        self.images = images
-        self.labels = labels
-        self.transform = transform
-        self.crop_or_pad = crop_or_pad
-        self.target_shape = target_shape
-
-    def __len__(self):
-        return len(self.images)
-    
-    def __getitem__(self, idx):
-        img = self.images[idx]
-        label = self.labels[idx]
-        img = self.crop_or_pad(img, self.target_shape)
-        
-        if self.transform is not None:
-            img = self.transform(img)
-
-        return img, label
-
 def crop_pad(img, ch_id, h_id, w_id, target_shape=(10, 224, 224)):
     if img.shape == target_shape:
         return img
@@ -53,6 +31,30 @@ def crop_pad(img, ch_id, h_id, w_id, target_shape=(10, 224, 224)):
     img = pad(img, x_before, x_after, y_before, y_after, ch_id)
     
     return img
+
+class MedicalDataset(Dataset):
+
+    def __init__(self, images, labels, transform=None, target_shape=(10, 224, 224), channel_id=0, h_id=1, w_id=2):
+        self.images = images
+        self.labels = labels
+        self.transform = transform
+        self.target_shape = target_shape
+        self.ch_id = channel_id
+        self.h_id = h_id
+        self.w_id = w_id
+
+    def __len__(self):
+        return len(self.images)
+    
+    def __getitem__(self, idx):
+        img = self.images[idx]
+        label = self.labels[idx]
+        img = crop_pad(img, self.ch_id, self.h_id, self.w_id, self.target_shape)
+        
+        if self.transform is not None:
+            img = self.transform(img)
+
+        return img, label
 
 def pad(img, x_before, x_after, y_before, y_after, ch_id):
     if isinstance(img, np.ndarray):
