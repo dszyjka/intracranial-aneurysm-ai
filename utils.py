@@ -30,6 +30,9 @@ class MedicalDataset(Dataset):
         return img, label
 
 def crop_pad(img, ch_id, h_id, w_id, target_shape=(10, 224, 224)):
+    if img.shape == target_shape:
+        return img
+    
     y_pad = max(0, target_shape[h_id] - img.shape[h_id])
     x_pad = max(0, target_shape[w_id] - img.shape[w_id])
 
