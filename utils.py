@@ -32,6 +32,23 @@ def crop_pad(img, ch_id, h_id, w_id, target_shape=(10, 224, 224)):
     
     return img
 
+def pad(img, x_before, x_after, y_before, y_after, ch_id):
+    if isinstance(img, np.ndarray):
+        img = (np.pad(img, ((y_before, y_after), (x_before, x_after), (0, 0)),
+                      mode='constant', constant_values=0.0)
+                if ch_id else
+                np.pad(img, ((0, 0), (y_before, y_after), (x_before, x_after)),
+                       mode='constant', constant_values=0.0))
+        
+    elif isinstance(img, torch.Tensor):
+        img = (F.pad(img, (0, 0, x_before, x_after, y_before, y_after), value=0.0)
+               if ch_id else F.pad(img, (x_before, x_after, y_before, y_after), value=0.0))
+    
+    else:
+        raise TypeError('img argument must be torch.Tensor or numpy.ndarray')
+    
+    return img
+
 class MedicalDataset(Dataset):
 
     def __init__(self, images, labels, transform=None, target_shape=(10, 224, 224), channel_id=0, h_id=1, w_id=2):
@@ -56,22 +73,60 @@ class MedicalDataset(Dataset):
 
         return img, label
 
-def pad(img, x_before, x_after, y_before, y_after, ch_id):
-    if isinstance(img, np.ndarray):
-        img = (np.pad(img, ((y_before, y_after), (x_before, x_after), (0, 0)),
-                      mode='constant', constant_values=0.0)
-                if ch_id else
-                np.pad(img, ((0, 0), (y_before, y_after), (x_before, x_after)),
-                       mode='constant', constant_values=0.0))
-        
-    elif isinstance(img, torch.Tensor):
-        img = (F.pad(img, (0, 0, x_before, x_after, y_before, y_after), value=0.0)
-               if ch_id else F.pad(img, (x_before, x_after, y_before, y_after), value=0.0))
-    
+def resample_img(img, is_mask=False):
+    if is_mask:
+        resample = tio.Resample((1, 1, 1), label_interpolation='nearest', image_interpolation='nearest')
     else:
-        raise TypeError('img argument must be torch.Tensor or numpy.ndarray')
-    
+        resample = tio.Resample((1, 1, 1))
+    return resample(img)
+
+def crop_or_pad_img(img, i=5):
+    crop_pad = tio.CropOrPad((256, 256, i))
+    return crop_pad(img)
+
+def image_clipping(img_arr, modality):
+    if modality == 'CTA':
+        vmin = -100
+        vmax = 600
+        return np.clip(img_arr, vmin, vmax)
+
+    p5 = np.percentile(img_arr, 5)
+    p95 = np.percentile(img_arr, 95)
+
+    vmin = p5 * 2
+    vmax = min(p95 * 2, img_arr.max())
+
+    return np.clip(img_arr, vmin, vmax)
+
+def get_physical_point_and_location(df_row):
+    xy = df_row['coordinates']
+    loc = df_row['location']
+
+    x = json.loads(xy.replace("\'", "\""))['x']
+    y = json.loads(xy.replace("\'", "\""))['y']
+
+    return x, y, loc
+
+def preprocess_img(img):
+    img = np.transpose(img, (1, 2, 0))
+    img = crop_pad(img, 2, 0, 1, target_shape=(256, 256, img.shape[2]))
     return img
+
+def normalize_data(train_data, test_data):
+    min_val = np.min(train_data)
+    max_val = np.max(train_data)
+    return (train_data - min_val) / (max_val - min_val), (test_data - min_val) / (max_val - min_val)
+
+def z_score(train_data, test_data):
+    mean_val = np.mean(train_data)
+    std_val = np.std(train_data)
+    return (train_data - mean_val) / std_val, (test_data - mean_val) / std_val
+
+def get_idx():
+    i = 0
+    while True:
+        yield i
+        i += 1
 
 def train_model(model, optimizer, criterion, train_loader, test_loader, num_epochs, device):
     acc_train_hist, loss_train_hist, acc_val_hist, loss_val_hist = [], [], [], []
