@@ -335,6 +335,42 @@ class MedicalDataset(Dataset):
             img = self.transform(img)
 
         return img, label
+    
+class SegmentationDataset(Dataset):
+
+    def __init__(self, path, series_lst, train_df, z_score_params):
+        self.path = path
+        self.data = train_df.loc[train_df['SeriesInstanceUID'].isin(series_lst)].reset_index(drop=True)
+        self.z_score_params = z_score_params
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        row = self.data[idx]
+        z_score_params = {}
+
+        if row['Modality'] == 'CTA':
+            z_score_params['mean_val'] = self.z_score_params['cta_mean']
+            z_score_params['std__val'] = self.z_score_params['cta_std']
+        else:
+            z_score_params['mean_val'] = self.z_score_paramms['mri_mean']
+            z_score_params['std__val'] = self.z_score_params['mri_std']
+
+        img_path = os.path.join(self.path, f'{row['SeriesInstanceUID']}.nii')
+        seg_path = os.path.join(self.path, f'{row['SeriesInstanceUID']}_cowseg.nii')
+
+        img = sitk.ReadImage(img_path)
+        img = sitk.DICOMOrient(img)
+        img_arr = sitk.GetArrayFromImage(img)
+
+        seg = sitk.ReadImage(seg_path)
+        seg = sitk.DICOMOrient(seg)
+        seg_arr = sitk.GetArrayFromImage(seg)
+
+        img_arr, seg_arr = process_data_for_segmentation(img_arr, seg_arr, z_score_params)
+
+        # place for rest of the __getitem__ method
 
 
 train_transform = transforms.Compose([
