@@ -82,8 +82,8 @@ def resample_img(img, is_mask=False):
         resample = tio.Resample((1, 1, 1))
     return resample(img)
 
-def crop_or_pad_img(img, i=5):
-    crop_pad = tio.CropOrPad((256, 256, i))
+def crop_or_pad_img(img, h=256, w=256, ch=5):
+    crop_pad = tio.CropOrPad((h, w, ch))
     return crop_pad(img)
 
 def image_clipping(img_arr, modality):
@@ -109,9 +109,9 @@ def get_physical_point_and_location(df_row):
 
     return x, y, loc
 
-def preprocess_img(img):
+def preprocess_img(img, target_height=256, target_width=256):
     img = np.transpose(img, (1, 2, 0))
-    img = crop_pad(img, 2, 0, 1, target_shape=(256, 256, img.shape[2]))
+    img = crop_pad(img, 2, 0, 1, target_shape=(target_height, target_width, img.shape[2]))
     return img
 
 def normalize_data(train_data, test_data):
@@ -130,7 +130,7 @@ def get_idx():
         yield i
         i += 1
 
-def train_model(model, optimizer, criterion, train_loader, test_loader, num_epochs, device):
+def train_model(model, optimizer, criterion, train_loader, val_loader, num_epochs, device):
     acc_train_hist, loss_train_hist, acc_val_hist, loss_val_hist = [], [], [], []
 
     lowest_loss = np.inf
@@ -146,7 +146,7 @@ def train_model(model, optimizer, criterion, train_loader, test_loader, num_epoc
                 loss_hist = loss_train_hist
                 model.train()
             else:
-                dataloader = test_loader
+                dataloader = val_loader
                 acc_hist = acc_val_hist
                 loss_hist = loss_val_hist
                 model.eval()
@@ -287,6 +287,16 @@ def to_tensor(x_train, y_train, x_test, y_test, permute_order=(0, -1, 1, 2)):
     x_test_tensor = x_test_tensor.permute(permute_order)
 
     return x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor
+
+def crop_to_nonzero(image):
+    nonzero_voxels = np.argwhere(image > 0)
+
+    assert nonzero_voxels.size > 0, 'Empty image'
+
+    min_ch, min_h, min_w = np.maximum(nonzero_voxels.min(axis=0) - 2, 0)
+    max_ch, max_h, max_w = nonzero_voxels.max(axis=0) + 3
+
+    return image[min_ch : max_ch, min_h : max_h, min_w : max_w]
 
 train_transform = transforms.Compose([
     transforms.RandomHorizontalFlip(p=0.5),
