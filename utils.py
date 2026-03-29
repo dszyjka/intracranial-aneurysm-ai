@@ -1,12 +1,14 @@
 from torch.utils.data import Dataset
-import torch.nn.functional as F
 from torchvision import transforms
 from sklearn.metrics import classification_report, ConfusionMatrixDisplay, confusion_matrix
 import matplotlib.pyplot as plt
-import torch
+import torch.nn.functional as F
 import numpy as np
-import json
 import torchio as tio
+import SimpleITK as sitk
+import torch
+import json
+import os
 
 
 def crop_pad(img, ch_id, h_id, w_id, target_shape=(10, 224, 224)):
@@ -50,30 +52,6 @@ def pad(img, x_before, x_after, y_before, y_after, ch_id):
         raise TypeError('img argument must be torch.Tensor or numpy.ndarray')
     
     return img
-
-class MedicalDataset(Dataset):
-
-    def __init__(self, images, labels, transform=None, target_shape=(10, 224, 224), channel_id=0, h_id=1, w_id=2):
-        self.images = images
-        self.labels = labels
-        self.transform = transform
-        self.target_shape = target_shape
-        self.ch_id = channel_id
-        self.h_id = h_id
-        self.w_id = w_id
-
-    def __len__(self):
-        return len(self.images)
-    
-    def __getitem__(self, idx):
-        img = self.images[idx]
-        label = self.labels[idx]
-        img = crop_pad(img, self.ch_id, self.h_id, self.w_id, self.target_shape)
-        
-        if self.transform is not None:
-            img = self.transform(img)
-
-        return img, label
 
 def resample_img(img, is_mask=False):
     if is_mask:
@@ -119,10 +97,13 @@ def normalize_data(train_data, test_data):
     max_val = np.max(train_data)
     return (train_data - min_val) / (max_val - min_val), (test_data - min_val) / (max_val - min_val)
 
-def z_score(train_data, test_data):
-    mean_val = np.mean(train_data)
-    std_val = np.std(train_data)
-    return (train_data - mean_val) / std_val, (test_data - mean_val) / std_val
+def z_score(train_data, test_data, params=None):
+    if params is None:
+        mean_val = np.mean(train_data)
+        std_val = np.std(train_data)
+        return (train_data - mean_val) / std_val, (test_data - mean_val) / std_val
+    
+    return (params['img'] - params['mean_val']) / params['std_val']
 
 def get_idx():
     i = 0
@@ -288,7 +269,7 @@ def to_tensor(x_train, y_train, x_test, y_test, permute_order=(0, -1, 1, 2)):
 
     return x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor
 
-def crop_to_nonzero(image):
+def crop_to_nonzero(image, seg=None):
     nonzero_voxels = np.argwhere(image > 0)
 
     assert nonzero_voxels.size > 0, 'Empty image'
@@ -296,7 +277,65 @@ def crop_to_nonzero(image):
     min_ch, min_h, min_w = np.maximum(nonzero_voxels.min(axis=0) - 2, 0)
     max_ch, max_h, max_w = nonzero_voxels.max(axis=0) + 3
 
-    return image[min_ch : max_ch, min_h : max_h, min_w : max_w]
+    if seg is None:
+        return image[min_ch : max_ch, min_h : max_h, min_w : max_w]
+    
+    return image[min_ch : max_ch, min_h : max_h, min_w : max_w], seg[min_ch : max_ch, min_h : max_h, min_w : max_w]
+
+def process_data_for_segmentation(img, seg, z_score_params):
+    img, seg = crop_to_nonzero(img, seg)
+    img = resample_img(img)
+    seg = resample_img(seg, True)
+    z_score_params['img'] = img
+    img = z_score(params=z_score_params)
+    return img, seg
+
+def compute_data_stats(train_series_lst, folder, train_df):
+    cta_means, cta_stds, mri_means, mri_stds = [], [], [], []
+
+    for ser in train_series_lst:
+        if train_df.loc[train_df['SeriesInstanceUID'] == ser]['Modality'].iloc[0] == 'CTA':
+            means = cta_means
+            stds = cta_stds
+        else:
+            means = mri_means
+            stds = mri_stds
+
+        path = os.path.join(folder, f'{ser}.nii')
+        img = sitk.ReadImage(path)
+        img = sitk.GetArrayFromImage(img)
+        img = crop_to_nonzero(img)
+        img = resample_img(img)
+
+        means.append(img.mean())
+        stds.append(img.std())
+
+    return np.mean(cta_means), np.means(cta_stds), np.mean(mri_means), np.means(mri_stds)
+
+class MedicalDataset(Dataset):
+
+    def __init__(self, images, labels, transform=None, target_shape=(10, 224, 224), channel_id=0, h_id=1, w_id=2):
+        self.images = images
+        self.labels = labels
+        self.transform = transform
+        self.target_shape = target_shape
+        self.ch_id = channel_id
+        self.h_id = h_id
+        self.w_id = w_id
+
+    def __len__(self):
+        return len(self.images)
+    
+    def __getitem__(self, idx):
+        img = self.images[idx]
+        label = self.labels[idx]
+        img = crop_pad(img, self.ch_id, self.h_id, self.w_id, self.target_shape)
+        
+        if self.transform is not None:
+            img = self.transform(img)
+
+        return img, label
+
 
 train_transform = transforms.Compose([
     transforms.RandomHorizontalFlip(p=0.5),
