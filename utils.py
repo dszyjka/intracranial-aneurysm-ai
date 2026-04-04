@@ -224,7 +224,7 @@ def evaluate_model(model, device, loader):
     plt.show()
 
 def draw_img(img):
-    fix, ax = plt.subplots(2, 5, figsize=(30, 5))
+    fig, ax = plt.subplots(2, 5, figsize=(30, 5))
 
     ax[0, 0].imshow(img[:, :, 0], cmap='gray')
     ax[0, 1].imshow(img[:, :, 1], cmap='gray')
@@ -269,26 +269,38 @@ def to_tensor(x_train, y_train, x_test, y_test, permute_order=(0, -1, 1, 2)):
 
     return x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor
 
-def crop_to_nonzero(image, seg=None):
-    nonzero_voxels = np.argwhere(image > 0)
+def crop_to_nonzero(img, seg=None):
+    img_arr = sitk.GetArrayFromImage(img)
+
+    nonzero_voxels = np.argwhere(img_arr > 0)
 
     assert nonzero_voxels.size > 0, 'Empty image'
 
     min_ch, min_h, min_w = np.maximum(nonzero_voxels.min(axis=0) - 2, 0)
     max_ch, max_h, max_w = nonzero_voxels.max(axis=0) + 3
 
-    if seg is None:
-        return image[min_ch : max_ch, min_h : max_h, min_w : max_w]
+    if seg is not None:
+        return (img[min_w : max_w, min_h : max_h, min_ch : max_ch],
+            seg[min_w : max_w, min_h : max_h, min_ch : max_ch])
     
-    return image[min_ch : max_ch, min_h : max_h, min_w : max_w], seg[min_ch : max_ch, min_h : max_h, min_w : max_w]
+    return img[min_w : max_w, min_h : max_h, min_ch : max_ch]
 
 def process_data_for_segmentation(img, seg, z_score_params):
+    img = sitk.DICOMOrient(img)
+    seg = sitk.DICOMOrient(seg)
+
     img, seg = crop_to_nonzero(img, seg)
+    
     img = resample_img(img)
     seg = resample_img(seg, True)
-    z_score_params['img'] = img
-    img = z_score(params=z_score_params)
-    return img, seg
+
+    img_arr = sitk.GetArrayFromImage(img)
+    seg_arr = sitk.GetArrayFromImage(seg)
+
+    z_score_params['img'] = img_arr
+    img_arr = z_score(params=z_score_params)
+
+    return img_arr, seg_arr
 
 def compute_data_stats(train_series_lst, folder, train_df):
     cta_means, cta_stds, mri_means, mri_stds = [], [], [], []
@@ -303,9 +315,9 @@ def compute_data_stats(train_series_lst, folder, train_df):
 
         path = os.path.join(folder, f'{ser}.nii')
         img = sitk.ReadImage(path)
-        img = sitk.GetArrayFromImage(img)
         img = crop_to_nonzero(img)
         img = resample_img(img)
+        img = sitk.GetArrayFromImage(img)
 
         means.append(img.mean())
         stds.append(img.std())
@@ -314,7 +326,9 @@ def compute_data_stats(train_series_lst, folder, train_df):
 
 class MedicalDataset(Dataset):
 
-    def __init__(self, images, labels, transform=None, target_shape=(10, 224, 224), channel_id=0, h_id=1, w_id=2):
+    def __init__(
+            self, images, labels, transform=None, target_shape=(10, 224, 224), channel_id=0, h_id=1, w_id=2):
+        
         self.images = images
         self.labels = labels
         self.transform = transform
@@ -354,21 +368,21 @@ class SegmentationDataset(Dataset):
             z_score_params['mean_val'] = self.z_score_params['cta_mean']
             z_score_params['std__val'] = self.z_score_params['cta_std']
         else:
-            z_score_params['mean_val'] = self.z_score_paramms['mri_mean']
+            z_score_params['mean_val'] = self.z_score_params['mri_mean']
             z_score_params['std__val'] = self.z_score_params['mri_std']
 
         img_path = os.path.join(self.path, f'{row['SeriesInstanceUID']}.nii')
         seg_path = os.path.join(self.path, f'{row['SeriesInstanceUID']}_cowseg.nii')
 
         img = sitk.ReadImage(img_path)
-        img = sitk.DICOMOrient(img)
-        img_arr = sitk.GetArrayFromImage(img)
+        #img = sitk.DICOMOrient(img)
+        #img_arr = sitk.GetArrayFromImage(img)
 
         seg = sitk.ReadImage(seg_path)
-        seg = sitk.DICOMOrient(seg)
-        seg_arr = sitk.GetArrayFromImage(seg)
+        #seg = sitk.DICOMOrient(seg)
+        #seg_arr = sitk.GetArrayFromImage(seg)
 
-        img_arr, seg_arr = process_data_for_segmentation(img_arr, seg_arr, z_score_params)
+        img, seg = process_data_for_segmentation(img, seg, z_score_params)
 
         # place for rest of the __getitem__ method
 
