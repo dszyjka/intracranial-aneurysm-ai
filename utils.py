@@ -352,37 +352,65 @@ class MedicalDataset(Dataset):
     
 class SegmentationDataset(Dataset):
 
-    def __init__(self, path, series_lst, train_df, z_score_params):
+    def __init__(self, path, series_lst, train_df, z_score_params, patch_size):
         self.path = path
         self.data = train_df.loc[train_df['SeriesInstanceUID'].isin(series_lst)].reset_index(drop=True)
         self.z_score_params = z_score_params
+        self.patch_size = patch_size
+
+    def _get_patch(self, img_arr, seg_arr, vessel_in_centre_prob=0.7):
+        if np.random.rand() >= vessel_in_centre_prob:
+            center = np.array(np.random.randint(0, seg_arr.shape, size=(3,)))
+        else:
+            vessels_indices = np.argwhere(seg_arr > 0)
+        
+            if len(vessels_indices) > 0:
+                center = vessels_indices[np.random.randint(0, len(vessels_indices))]
+            else:
+                center = np.array([d // 2 for d in seg_arr.shape])
+
+        slices = []
+        for d in range(3):
+            start = max(0, center[d] - (self.patch_size[d] // 2))
+            end = max(0, start + self.patch_size[d])
+
+            if end > seg_arr.shape[d]:
+                end = seg_arr.shape[d]
+                start = max(0, seg_arr.shape[d] - self.patch_size[d])
+
+            slices.append(slice(start, end))
+
+        img_arr = img_arr[tuple(slices)]
+        seg_arr = seg_arr[tuple(slices)]
+
+        if img_arr.shape != self.patch_size:
+            pad_width = [(0, p - i) for p, i in zip(self.patch_size, img_arr.shape)]
+            img_arr = np.pad(img_arr, pad_width, mode='constant', constant_values=0.0)
+            seg_arr = np.pad(seg_arr, pad_width, mode='constant', constant_values=0.0)
+
+        return img_arr, seg_arr
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
         row = self.data[idx]
-        z_score_params = {}
+        modality_params = {}
 
         if row['Modality'] == 'CTA':
-            z_score_params['mean_val'] = self.z_score_params['cta_mean']
-            z_score_params['std__val'] = self.z_score_params['cta_std']
+            modality_params['mean_val'] = self.z_score_params['cta_mean']
+            modality_params['std__val'] = self.z_score_params['cta_std']
         else:
-            z_score_params['mean_val'] = self.z_score_params['mri_mean']
-            z_score_params['std__val'] = self.z_score_params['mri_std']
+            modality_params['mean_val'] = self.z_score_params['mri_mean']
+            modality_params['std__val'] = self.z_score_params['mri_std']
 
         img_path = os.path.join(self.path, f'{row['SeriesInstanceUID']}.nii')
         seg_path = os.path.join(self.path, f'{row['SeriesInstanceUID']}_cowseg.nii')
 
         img = sitk.ReadImage(img_path)
-        #img = sitk.DICOMOrient(img)
-        #img_arr = sitk.GetArrayFromImage(img)
-
         seg = sitk.ReadImage(seg_path)
-        #seg = sitk.DICOMOrient(seg)
-        #seg_arr = sitk.GetArrayFromImage(seg)
 
-        img, seg = process_data_for_segmentation(img, seg, z_score_params)
+        img_arr, seg_arr = process_data_for_segmentation(img, seg, modality_params)
 
         # place for rest of the __getitem__ method
 
