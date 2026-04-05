@@ -394,15 +394,15 @@ class SegmentationDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        row = self.data[idx]
+        row = self.data.iloc[idx]
         modality_params = {}
 
         if row['Modality'] == 'CTA':
             modality_params['mean_val'] = self.z_score_params['cta_mean']
-            modality_params['std__val'] = self.z_score_params['cta_std']
+            modality_params['std_val'] = self.z_score_params['cta_std']
         else:
             modality_params['mean_val'] = self.z_score_params['mri_mean']
-            modality_params['std__val'] = self.z_score_params['mri_std']
+            modality_params['std_val'] = self.z_score_params['mri_std']
 
         img_path = os.path.join(self.path, f'{row['SeriesInstanceUID']}.nii')
         seg_path = os.path.join(self.path, f'{row['SeriesInstanceUID']}_cowseg.nii')
@@ -412,7 +412,12 @@ class SegmentationDataset(Dataset):
 
         img_arr, seg_arr = process_data_for_segmentation(img, seg, modality_params)
 
-        # place for rest of the __getitem__ method
+        img_arr, seg_arr = self._get_patch(img_arr, seg_arr)
+
+        img_arr = torch.from_numpy(img_arr).float().unsqueeze(0)
+        seg_arr = torch.from_numpy(seg_arr).long()
+
+        return img_arr, seg_arr
 
 
 train_transform = transforms.Compose([
