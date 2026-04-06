@@ -1,1 +1,0 @@
-from .labels import seg_with_loc, label2organ, organ2label
