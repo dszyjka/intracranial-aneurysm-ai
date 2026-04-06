@@ -352,11 +352,12 @@ class MedicalDataset(Dataset):
     
 class SegmentationDataset(Dataset):
 
-    def __init__(self, path, series_lst, train_df, z_score_params, patch_size):
+    def __init__(self, path, series_lst, train_df, z_score_params, patch_size, transform=None):
         self.path = path
         self.data = train_df.loc[train_df['SeriesInstanceUID'].isin(series_lst)].reset_index(drop=True)
         self.z_score_params = z_score_params
         self.patch_size = patch_size
+        self.transform = transform
 
     def _get_patch(self, img_arr, seg_arr, vessel_in_centre_prob=0.7):
         if np.random.rand() >= vessel_in_centre_prob:
@@ -412,12 +413,16 @@ class SegmentationDataset(Dataset):
 
         img_arr, seg_arr = process_data_for_segmentation(img, seg, modality_params)
 
-        img_arr, seg_arr = self._get_patch(img_arr, seg_arr)
+        patch_img, patch_seg = self._get_patch(img_arr, seg_arr)
 
-        img_arr = torch.from_numpy(img_arr).float().unsqueeze(0)
-        seg_arr = torch.from_numpy(seg_arr).long()
+        if self.transform is not None:
+            patch_img = self.transform(patch_img)
+            patch_seg = self.transform(patch_seg)
 
-        return img_arr, seg_arr
+        patch_img = torch.from_numpy(patch_img).float().unsqueeze(0)
+        patch_seg = torch.from_numpy(patch_seg).long()
+
+        return patch_img, patch_seg
 
 
 train_transform = transforms.Compose([
