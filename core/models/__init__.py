@@ -4,3 +4,4 @@ from .classification_models import (
     AneurysmClassifierResNet,
     AneurysmClassifierMobileNet,
     AneurysmClassifierShuffleNet)
+from segmentation_models import VNet
