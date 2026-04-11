@@ -49,25 +49,3 @@ def to_tensor(x_train, y_train, x_test, y_test, permute_order=(0, -1, 1, 2)):
     x_test_tensor = x_test_tensor.permute(permute_order)
 
     return x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor
-
-def compute_data_stats(train_series_lst, folder, train_df):
-    cta_means, cta_stds, mri_means, mri_stds = [], [], [], []
-
-    for ser in train_series_lst:
-        if train_df.loc[train_df['SeriesInstanceUID'] == ser]['Modality'].iloc[0] == 'CTA':
-            means = cta_means
-            stds = cta_stds
-        else:
-            means = mri_means
-            stds = mri_stds
-
-        path = os.path.join(folder, f'{ser}.nii')
-        img = sitk.ReadImage(path)
-        img = crop_to_nonzero(img)
-        img = resample_img(img)
-        img = sitk.GetArrayFromImage(img)
-
-        means.append(img.mean())
-        stds.append(img.std())
-
-    return np.mean(cta_means), np.means(cta_stds), np.mean(mri_means), np.means(mri_stds)
