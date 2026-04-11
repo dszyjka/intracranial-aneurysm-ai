@@ -3,7 +3,7 @@ import os
 import SimpleITK as sitk
 import numpy as np
 from torch.utils.data import Dataset
-from core.preprocessing import process_data_for_segmentation, crop_pad
+from core.preprocessing import process_data_for_segmentation
 
 
 class SegmentationDataset(Dataset):
@@ -55,9 +55,11 @@ class SegmentationDataset(Dataset):
         modality_params = {}
 
         if row['Modality'] == 'CTA':
+            modality_params['modality'] = 'CTA'
             modality_params['mean_val'] = self.z_score_params['cta_mean']
             modality_params['std_val'] = self.z_score_params['cta_std']
         else:
+            modality_params['modality'] = 'MRI'
             modality_params['mean_val'] = self.z_score_params['mri_mean']
             modality_params['std_val'] = self.z_score_params['mri_std']
 

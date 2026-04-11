@@ -1,18 +1,21 @@
 import os
 import json
+import tqdm
 import numpy as np
 import pandas as pd
 import SimpleITK as sitk
 from sklearn.model_selection import train_test_split
-from core.preprocessing import crop_to_nonzero, resample_img
+from core.preprocessing import crop_to_nonzero, resample_img, image_clipping
 from core.constants import seg_with_loc
 
 
 def compute_data_stats(train_series, folder, train_df):
     cta_means, cta_stds, mri_means, mri_stds = [], [], [], []
 
-    for ser in train_series:
-        if train_df.loc[train_df['SeriesInstanceUID'] == ser]['Modality'].iloc[0] == 'CTA':
+    for ser in tqdm(train_series, desc='Computing data stats'):
+        modality = train_df.loc[train_df['SeriesInstanceUID'] == ser]['Modality'].iloc[0]
+
+        if modality == 'CTA':
             means = cta_means
             stds = cta_stds
         else:
@@ -24,6 +27,7 @@ def compute_data_stats(train_series, folder, train_df):
         img = crop_to_nonzero(img)
         img = resample_img(img)
         img = sitk.GetArrayFromImage(img)
+        img = image_clipping(img, modality)
 
         means.append(img.mean())
         stds.append(img.std())

@@ -3,7 +3,7 @@ import numpy as np
 import torch.nn.functional as F
 import torchio as tio
 import torch
-from .normalization import z_score
+from .normalization import z_score, image_clipping
 
 
 def crop_to_nonzero(img, seg=None):
@@ -34,6 +34,7 @@ def process_data_for_segmentation(img, seg, z_score_params):
     img_arr = sitk.GetArrayFromImage(img)
     seg_arr = sitk.GetArrayFromImage(seg)
 
+    img_arr = image_clipping(img_arr, z_score_params['modality'])
     z_score_params['img'] = img_arr
     img_arr = z_score(params=z_score_params)
 
