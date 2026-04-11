@@ -8,10 +8,10 @@ from core.preprocessing import crop_to_nonzero, resample_img
 from core.constants import seg_with_loc
 
 
-def compute_data_stats(train_series_lst, folder, train_df):
+def compute_data_stats(train_series, folder, train_df):
     cta_means, cta_stds, mri_means, mri_stds = [], [], [], []
 
-    for ser in train_series_lst:
+    for ser in train_series:
         if train_df.loc[train_df['SeriesInstanceUID'] == ser]['Modality'].iloc[0] == 'CTA':
             means = cta_means
             stds = cta_stds
@@ -38,7 +38,7 @@ def split_series_for_datasets(seg_with_loc, train_size=0.8):
     return train_ser, test_ser
 
 def main():
-    base_data_dir = 'G:\\Dyski współdzielone\\DATA\\rsna-intracranial-aneurysm-detection'
+    base_data_dir = 'C:\\RSNA_data'
     segmentations_path = os.path.join(base_data_dir, 'segmentations')
     train_df = pd.read_csv(os.path.join(base_data_dir, 'train.csv'))
 
