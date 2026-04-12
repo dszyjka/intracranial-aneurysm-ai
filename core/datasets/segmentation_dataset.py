@@ -3,7 +3,7 @@ import os
 import SimpleITK as sitk
 import numpy as np
 from torch.utils.data import Dataset
-from core.preprocessing import process_data_for_segmentation
+from core.preprocessing import process_image_for_segmentation
 
 
 class SegmentationDataset(Dataset):
@@ -69,7 +69,7 @@ class SegmentationDataset(Dataset):
         img = sitk.ReadImage(img_path)
         seg = sitk.ReadImage(seg_path)
 
-        img_arr, seg_arr = process_data_for_segmentation(img, seg, modality_params)
+        img_arr, seg_arr = process_image_for_segmentation(img, seg, modality_params)
 
         patch_img, patch_seg = self._get_patch(img_arr, seg_arr)
 

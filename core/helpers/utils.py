@@ -38,7 +38,7 @@ def repeat_samples(x, y, repeats):
 
     return new_x, new_y
 
-def to_tensor(x_train, y_train, x_test, y_test, permute_order=(0, -1, 1, 2)):
+def train_and_test_to_tensors(x_train, y_train, x_test, y_test, permute_order=(0, -1, 1, 2)):
     x_train_tensor = torch.from_numpy(x_train).float()
     y_train_tensor = torch.from_numpy(y_train).long()
 

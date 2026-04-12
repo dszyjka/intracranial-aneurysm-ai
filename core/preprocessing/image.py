@@ -22,7 +22,7 @@ def crop_to_nonzero(img, seg=None):
     
     return img[min_w : max_w, min_h : max_h, min_ch : max_ch]
 
-def process_data_for_segmentation(img, seg, z_score_params):
+def process_image_for_segmentation(img, seg, z_score_params):
     img = sitk.DICOMOrient(img)
     seg = sitk.DICOMOrient(seg)
 
@@ -66,11 +66,11 @@ def crop_pad(img, ch_id, h_id, w_id, target_shape=(10, 224, 224)):
     x_before = x_pad // 2
     x_after = x_pad - x_before
     
-    img = pad(img, x_before, x_after, y_before, y_after, ch_id)
+    img = _padXY(img, x_before, x_after, y_before, y_after, ch_id)
     
     return img
 
-def pad(img, x_before, x_after, y_before, y_after, ch_id):
+def _padXY(img, x_before, x_after, y_before, y_after, ch_id):
     if isinstance(img, np.ndarray):
         img = (np.pad(img, ((y_before, y_after), (x_before, x_after), (0, 0)),
                       mode='constant', constant_values=0.0)
