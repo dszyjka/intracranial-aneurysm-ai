@@ -1,6 +1,6 @@
 import os
 import json
-import tqdm
+from tqdm import tqdm
 import numpy as np
 import pandas as pd
 import SimpleITK as sitk
