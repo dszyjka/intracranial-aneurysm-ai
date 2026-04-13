@@ -7,4 +7,4 @@ from .image import (
     crop_or_pad_img)
 
 from .normalization import normalize_data, z_score, image_clipping
-from .transforms import train_transform
+from .transforms import classification_transform, SegmentationTransform

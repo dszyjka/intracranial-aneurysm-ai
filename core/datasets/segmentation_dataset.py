@@ -1,28 +1,36 @@
 import torch
 import os
-import SimpleITK as sitk
 import numpy as np
 from torch.utils.data import Dataset
-from core.preprocessing import process_image_for_segmentation
 
 
 class SegmentationDataset(Dataset):
 
-    def __init__(self, path, series_lst, train_df, z_score_params, patch_size, transform=None):
-        self.path = path
-        self.data = train_df.loc[train_df['SeriesInstanceUID'].isin(series_lst)].reset_index(drop=True)
-        self.z_score_params = z_score_params
+    def __init__(self, files_dir, series, patch_size, transform=None):
+        self.files_dir = files_dir
+        self.series = series
         self.patch_size = patch_size
         self.transform = transform
+        self.vessel_indices = self._precompute_vessel_indices()
 
-    def _get_patch(self, img_arr, seg_arr, vessel_in_centre_prob=0.7):
-        if np.random.rand() >= vessel_in_centre_prob:
-            center = np.array(np.random.randint(0, seg_arr.shape, size=(3,)))
+    def _precompute_vessel_indices(self):
+        vessel_indices = {}
+
+        for ser in self.series:
+            seg_path = os.path.join(self.files_dir, 'segmentations', f'{ser}.npy')
+            seg = np.load(seg_path)
+            vessel_indices[ser] = np.argwhere(seg > 0)
+
+        return vessel_indices
+
+    def _get_patch(self, img_arr, seg_arr, ser, vessel_in_centre_prob=0.7):
+        if torch.rand(1).item() >= vessel_in_centre_prob:
+            center = np.array([torch.randint(0, dim, (1,)).item() for dim in seg_arr.shape])
         else:
-            vessels_indices = np.argwhere(seg_arr > 0)
+            vessels = self.vessel_indices[ser]
         
-            if len(vessels_indices) > 0:
-                center = vessels_indices[np.random.randint(0, len(vessels_indices))]
+            if len(vessels) > 0:
+                center = vessels[torch.randint(0, len(vessels), (1,)).item()]
             else:
                 center = np.array([d // 2 for d in seg_arr.shape])
 
@@ -41,43 +49,32 @@ class SegmentationDataset(Dataset):
         seg_arr = seg_arr[tuple(slices)]
 
         if img_arr.shape != self.patch_size:
-            pad_width = [(0, p - i) for p, i in zip(self.patch_size, img_arr.shape)]
+            pad_width = [((p - i) // 2, (p - i) - ((p - i) // 2))
+                         for p, i in zip(self.patch_size, img_arr.shape)]
+            
             img_arr = np.pad(img_arr, pad_width, mode='constant', constant_values=0.0)
             seg_arr = np.pad(seg_arr, pad_width, mode='constant', constant_values=0.0)
 
         return img_arr, seg_arr
 
     def __len__(self):
-        return len(self.data)
+        return len(self.series)
 
     def __getitem__(self, idx):
-        row = self.data.iloc[idx]
-        modality_params = {}
+        ser = self.series[idx]
 
-        if row['Modality'] == 'CTA':
-            modality_params['modality'] = 'CTA'
-            modality_params['mean_val'] = self.z_score_params['cta_mean']
-            modality_params['std_val'] = self.z_score_params['cta_std']
-        else:
-            modality_params['modality'] = 'MRI'
-            modality_params['mean_val'] = self.z_score_params['mri_mean']
-            modality_params['std_val'] = self.z_score_params['mri_std']
+        img_path = os.path.join(self.files_dir, 'images', f'{ser}.npy')
+        seg_path = os.path.join(self.files_dir, 'segmentations', f'{ser}.npy')
 
-        img_path = os.path.join(self.path, f'{row['SeriesInstanceUID']}.nii')
-        seg_path = os.path.join(self.path, f'{row['SeriesInstanceUID']}_cowseg.nii')
+        img = np.load(img_path, mmap_mode='r')
+        seg = np.load(seg_path, mmap_mode='r')
 
-        img = sitk.ReadImage(img_path)
-        seg = sitk.ReadImage(seg_path)
+        img_patch, seg_patch = self._get_patch(img, seg, ser)
 
-        img_arr, seg_arr = process_image_for_segmentation(img, seg, modality_params)
-
-        patch_img, patch_seg = self._get_patch(img_arr, seg_arr)
+        img_tensor = torch.from_numpy(img_patch.copy()).float().unsqueeze(0)
+        seg_tensor = torch.from_numpy(seg_patch.copy()).long()
 
         if self.transform is not None:
-            patch_img = self.transform(patch_img)
-            patch_seg = self.transform(patch_seg)
+            img_tensor, seg_tensor = self.transform(img_tensor, seg_tensor)
 
-        patch_img = torch.from_numpy(patch_img).float().unsqueeze(0)
-        patch_seg = torch.from_numpy(patch_seg).long()
-
-        return patch_img, patch_seg
+        return img_tensor, seg_tensor
